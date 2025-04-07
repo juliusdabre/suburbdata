@@ -6,50 +6,48 @@ import plotly.express as px
 # Load data
 df = pd.read_csv("propwealthnext_suburb_data.csv")
 
-# Sidebar controls
+# Sidebar
 st.sidebar.header("🏘️ Suburb Selector & Filters")
-selected_score = st.sidebar.slider("🎯 Filter by Investor Score", 0, 100, (60, 100))
-filtered_df = df[(df["Investor Score"] >= selected_score[0]) & (df["Investor Score"] <= selected_score[1])]
-
+score_range = st.sidebar.slider("🎯 Filter by Investor Score", 0, 100, (60, 100))
+filtered_df = df[(df["Investor Score"] >= score_range[0]) & (df["Investor Score"] <= score_range[1])]
 selected_suburb = st.sidebar.selectbox("📍 Choose a Suburb", filtered_df["Suburb"].unique())
 
-# Main Display
-st.title("📊 Suburb Investment Intelligence Report")
+# Main title
+st.title("📊 Suburb Investment Dashboard")
 
-st.subheader("🏙️ Suburbs Matching Investor Score")
-st.dataframe(filtered_df[["Suburb", "Investor Score"]].drop_duplicates().reset_index(drop=True))
-
+# Metric display
 if selected_suburb:
-    st.subheader(f"📄 Detailed Report for {selected_suburb}")
     row = df[df["Suburb"] == selected_suburb].iloc[0]
     st.markdown(f"""
-    **List Price**: N/A  
-    **Median**: N/A  
-    **Now**: N/A  
+    ### 📍 Report for **{selected_suburb}**
+    <div style='line-height: 2.5; font-size: 18px;'>
+    💰 <b>Median Price</b>: ${int(row['Median Price']) if 'Median Price' in row else 'N/A'}<br>
+    📈 <b>12M Growth</b>: {row['12M Growth (%)']}%<br>
+    💸 <b>Yield</b>: {row['Yield']}%<br>
+    📊 <b>Rent Change</b>: N/A<br>
+    🧮 <b>Buy Affordability</b>: {row['Buy Affordability']} yrs<br>
+    📉 <b>Rent Affordability</b>: {row['Rent Affordability']}%<br>
+    📈 <b>10Y Growth (PA)</b>: {row['10Y Growth (%)']}%
+    </div>
+    """, unsafe_allow_html=True)
 
-    **12m Growth (%)**: {row['12M Growth (%)']}%  
-    **10 Year Growth (%)**: {row['10Y Growth (%)']}%  
-    **Growth Gap**: {row['Growth Gap']}  
-    **Rent Affordability (% of Income)**: {row['Rent Affordability']}  
-    **Buy Affordability (Years)**: {row['Buy Affordability']}  
-    **Yield**: {row['Yield']}  
-    """)
+# Display map like your screenshot
+st.subheader(f"📌 Metric Map: 12M Growth (%) Across All Suburbs")
 
-# Map Visualization
-st.subheader("🗺️ Map Visualization of Metrics")
-metric = st.selectbox("📌 Select a Metric to Map", [
-    "12M Growth (%)", "10Y Growth (%)", "Growth Gap", 
-    "Rent Affordability", "Buy Affordability", "Yield", "Investor Score"
-])
+# Use lat/lon if available or random placeholder
+df['Latitude'] = df['Latitude'] if 'Latitude' in df.columns else -33.87
+df['Longitude'] = df['Longitude'] if 'Longitude' in df.columns else 151.21
 
-map_fig = px.scatter(
+map_fig = px.scatter_mapbox(
     df,
-    x="Buy Affordability",
-    y="Rent Affordability",
-    size=metric,
-    color=metric,
+    lat="Latitude",
+    lon="Longitude",
+    color="12M Growth (%)",
+    size="12M Growth (%)",
     hover_name="Suburb",
-    title=f"{metric} across Suburbs",
-    labels={metric: metric}
+    zoom=4,
+    height=600,
+    mapbox_style="carto-positron",
+    color_continuous_scale="Viridis"
 )
 st.plotly_chart(map_fig)
