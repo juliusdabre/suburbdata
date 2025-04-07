@@ -2,52 +2,83 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import seaborn as sns
+import matplotlib.pyplot as plt
+import io
 
 # Load data
-df = pd.read_csv("propwealthnext_suburb_data.csv")
+df = pd.read_excel("Dataa.xlsx", sheet_name="Sheet2")
+df.columns = df.columns.str.strip()
 
-# Sidebar
-st.sidebar.header("🏘️ Suburb Selector & Filters")
-score_range = st.sidebar.slider("🎯 Filter by Investor Score", 0, 100, (60, 100))
-filtered_df = df[(df["Investor Score"] >= score_range[0]) & (df["Investor Score"] <= score_range[1])]
-selected_suburb = st.sidebar.selectbox("📍 Choose a Suburb", filtered_df["Suburb"].unique())
+# Rename and filter necessary columns
+df = df.rename(columns={"Lat": "Latitude", "Long": "Longitude"})
+df = df.dropna(subset=["Suburb", "Latitude", "Longitude", "Investor Score (Out Of 100)"]).drop_duplicates()
 
-# Main title
-st.title("📊 Suburb Investment Dashboard")
+# Sidebar Filters
+st.sidebar.header("🎯 Filter for Investor Research")
+score_range = st.sidebar.slider("Investor Score Range", 0, 100, (60, 100))
+selected_state = st.sidebar.multiselect("Filter by State", options=df["State"].unique(), default=df["State"].unique())
+selected_type = st.sidebar.multiselect("Property Type", options=df["Property\nType"].unique(), default=df["Property\nType"].unique())
 
-# Metric display
+# Apply filters
+filtered_df = df[
+    (df["Investor Score (Out Of 100)"].between(score_range[0], score_range[1])) &
+    (df["State"].isin(selected_state)) &
+    (df["Property\nType"].isin(selected_type))
+]
+
+st.title("🏡 Smart Investor Dashboard")
+
+# Suburb selection
+selected_suburb = st.selectbox("📍 Choose a Suburb to View Report", filtered_df["Suburb"].unique())
+
+# Display metrics with real values
 if selected_suburb:
-    row = df[df["Suburb"] == selected_suburb].iloc[0]
+    row = filtered_df[filtered_df["Suburb"] == selected_suburb].iloc[0]
     st.markdown(f"""
-    ### 📍 Report for **{selected_suburb}**
-    <div style='line-height: 2.5; font-size: 18px;'>
-    💰 <b>Median Price</b>: ${int(row['Median Price']) if 'Median Price' in row else 'N/A'}<br>
-    📈 <b>12M Growth</b>: {row['12M Growth (%)']}%<br>
+    ### 📌 Investor Metrics: {selected_suburb}
+    <div style='line-height: 2.2; font-size: 18px;'>
+    💰 <b>Investor Score</b>: {row['Investor Score (Out Of 100)']}<br>
+    📈 <b>10 Year Growth</b>: {row['10 Year Growth']}%<br>
+    🔥 <b>Growth Gap Index</b>: {row['Growth Gap Index']}<br>
     💸 <b>Yield</b>: {row['Yield']}%<br>
-    📊 <b>Rent Change</b>: N/A<br>
-    🧮 <b>Buy Affordability</b>: {row['Buy Affordability']} yrs<br>
-    📉 <b>Rent Affordability</b>: {row['Rent Affordability']}%<br>
-    📈 <b>10Y Growth (PA)</b>: {row['10Y Growth (%)']}%
+    🧮 <b>Buy Affordability</b>: {row['Buy Affordability (Years)']} yrs<br>
+    📉 <b>Rent Affordability</b>: {row['Rent Affordability (% Of Income)']}%
     </div>
     """, unsafe_allow_html=True)
 
-# Display map like your screenshot
-st.subheader(f"📌 Metric Map: 12M Growth (%) Across All Suburbs")
-
-# Use lat/lon if available or random placeholder
-df['Latitude'] = df['Latitude'] if 'Latitude' in df.columns else -33.87
-df['Longitude'] = df['Longitude'] if 'Longitude' in df.columns else 151.21
-
+# Geo Map
+st.subheader("🗺️ Suburb Map Based on Investor Score")
 map_fig = px.scatter_mapbox(
-    df,
+    filtered_df,
     lat="Latitude",
     lon="Longitude",
-    color="12M Growth (%)",
-    size="12M Growth (%)",
+    color="Investor Score (Out Of 100)",
+    size="Growth Gap Index",
     hover_name="Suburb",
     zoom=4,
-    height=600,
-    mapbox_style="carto-positron",
-    color_continuous_scale="Viridis"
+    mapbox_style="open-street-map",
+    height=500
 )
 st.plotly_chart(map_fig)
+
+# Heatmap
+st.subheader("🔥 Correlation Heatmap of Investment Metrics")
+heat_cols = [
+    "Investor Score (Out Of 100)", "Growth Gap Index", "10 Year Growth",
+    "Yield", "Buy Affordability (Years)", "Rent Affordability (% Of Income)"
+]
+corr = filtered_df[heat_cols].corr()
+
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+st.pyplot(fig)
+
+buf = io.BytesIO()
+fig.savefig(buf, format="png")
+st.download_button(
+    label="📥 Download Heatmap as PNG",
+    data=buf.getvalue(),
+    file_name="heatmap_investor_metrics.png",
+    mime="image/png"
+)
